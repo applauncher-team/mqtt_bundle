@@ -6,7 +6,7 @@ with open('requirements.txt') as fp:
 setup(
     name='mqtt_bundle',
     packages=['mqtt_bundle'],
-    version='2.1',
+    version='2.3',
     description='mqtt support for applauncher',
     author='Alvaro Garcia Gomez',
     author_email='maxpowel@gmail.com',

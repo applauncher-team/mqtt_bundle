@@ -1,8 +1,10 @@
-from applauncher.kernel import KernelReadyEvent, Kernel, Event, ConfigurationReadyEvent, EventManager, KernelShutdownEvent
+from applauncher.kernel import KernelReadyEvent, Kernel, Event, ConfigurationReadyEvent, EventManager, \
+    KernelShutdownEvent
 import inject
 import threading
 import paho.mqtt.client as mqtt
 import logging
+
 
 class MqttConnectEvent(Event):
     event_name = "mqtt.connect"
@@ -13,8 +15,18 @@ class MqttConnectEvent(Event):
         self.flags = flags
         self.rc = rc
 
-class MqttMessageEvent(Event):
 
+class MqttConnectEvent(Event):
+    event_name = "mqtt.disconnect"
+
+    def __init__(self, client, userdata, flags, rc):
+        self.client = client
+        self.userdata = userdata
+        self.flags = flags
+        self.rc = rc
+
+
+class MqttMessageEvent(Event):
     event_name = "mqtt.message"
 
     def __init__(self, client, userdata, message):
@@ -81,6 +93,10 @@ class MqttBundle(object):
         self.logger.info("Connected")
         event_manager.dispatch(MqttConnectEvent(client, userdata, flags, rc))
 
+    @inject.params(event_manager=EventManager)
+    def _on_disconnect(self, event_manager: EventManager, *kwargs):
+        self.logger.info("Disconnected")
+        event_manager.dispatch(MqttDisconnectEvent(client, userdata, flags, rc))
 
     @inject.params(event_manager=EventManager)
     def _on_message(self, client, userdata, message, event_manager: EventManager):
@@ -100,14 +116,11 @@ class MqttBundle(object):
         self.client.disconnect()
         self.client.loop_stop(force=False)
         self.lock.release()
-        self.logger.info("Disconnected")
-
 
     @inject.params(kernel=Kernel)
     def kernel_ready(self, event, kernel):
         self.lock.acquire()
         kernel.run_service(lambda lock: lock.acquire(), self.lock)
-
 
     def configuration_ready(self, event):
         # First connect the topic manager to avoid lose messages
@@ -120,6 +133,7 @@ class MqttBundle(object):
 
         self.client.on_message = self._on_message
         self.client.on_connect = self._on_connect
+        self.client._on_disconnect = self._on_disconnect
 
         self.client.connect(config.host)
         self.client.loop_start()
