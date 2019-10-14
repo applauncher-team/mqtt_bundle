@@ -1,9 +1,17 @@
-from applauncher.kernel import KernelReadyEvent, Configuration, KernelShutdownEvent, Kernel, Event, ConfigurationReadyEvent, EventManager, KernelShutdownEvent
+from applauncher.kernel import KernelReadyEvent, Kernel, Event, ConfigurationReadyEvent, EventManager, KernelShutdownEvent
 import inject
 import threading
 import paho.mqtt.client as mqtt
 import logging
 
+class MqttConnectEvent(Event):
+    event_name = "mqtt.connect"
+
+    def __init__(self, client, userdata, flags, rc):
+        self.client = client
+        self.userdata = userdata
+        self.flags = flags
+        self.rc = rc
 
 class MqttMessageEvent(Event):
 
@@ -17,7 +25,6 @@ class MqttMessageEvent(Event):
 
 class MqttTopicEvent(Event):
     event_name = "mqtt.topic_event"
-
 
 
 class MqttTopicManager(object):
@@ -43,17 +50,20 @@ class MqttTopicManager(object):
 class MqttBundle(object):
 
     def __init__(self):
-
+        self.logger = logging.getLogger("mqtt_bundle")
         self.config_mapping = {
             "mqtt": {
-                "host": None
+                "host": None,
+                "username": "",
+                "password": "",
+                "client_id": "",
+                "group_id": "",
+                "clean_session": True
             }
         }
 
         self.logger = logging.getLogger("mqtt")
         self.client = mqtt.Client()
-        self.client.on_message = self._on_message
-
         self.injection_bindings = {
             mqtt.Client: self.client
         }
@@ -65,6 +75,12 @@ class MqttBundle(object):
             (KernelShutdownEvent, self.kernel_shutdown),
             (MqttMessageEvent, self.notify_topic_event)
         ]
+
+    @inject.params(event_manager=EventManager)
+    def _on_connect(self, client, userdata, flags, rc, event_manager: EventManager):
+        self.logger.info("Connected")
+        event_manager.dispatch(MqttConnectEvent(client, userdata, flags, rc))
+
 
     @inject.params(event_manager=EventManager)
     def _on_message(self, client, userdata, message, event_manager: EventManager):
@@ -96,7 +112,15 @@ class MqttBundle(object):
     def configuration_ready(self, event):
         # First connect the topic manager to avoid lose messages
         self.injection_bindings[MqttTopicManager] = MqttTopicManager(self.client)
-        config = event.configuration
-        self.client.connect(config.mqtt.host)
+        config = event.configuration.mqtt
+
+        self.client.reinitialise(client_id=config.client_id, clean_session=config.clean_session)
+        if config.username and config.password:
+            self.client.username_pw_set(username=config.username, password=config.password)
+
+        self.client.on_message = self._on_message
+        self.client.on_connect = self._on_connect
+
+        self.client.connect(config.host)
         self.client.loop_start()
-        self.logger.info("Connected to {host} and ready".format(host=config.mqtt.host))
+        self.logger.info("Connected to {host} and ready".format(host=config.host))

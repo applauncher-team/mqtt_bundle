@@ -1,2 +1,2 @@
-applauncher==1.42
+applauncher==1.44
 paho-mqtt==1.4.0
