@@ -16,14 +16,8 @@ class MqttConnectEvent(Event):
         self.rc = rc
 
 
-class MqttConnectEvent(Event):
+class MqttDisconnectEvent(Event):
     event_name = "mqtt.disconnect"
-
-    def __init__(self, client, userdata, flags, rc):
-        self.client = client
-        self.userdata = userdata
-        self.flags = flags
-        self.rc = rc
 
 
 class MqttMessageEvent(Event):
@@ -69,7 +63,6 @@ class MqttBundle(object):
                 "username": "",
                 "password": "",
                 "client_id": "",
-                "group_id": "",
                 "clean_session": True
             }
         }
@@ -96,7 +89,7 @@ class MqttBundle(object):
     @inject.params(event_manager=EventManager)
     def _on_disconnect(self, event_manager: EventManager, *kwargs):
         self.logger.info("Disconnected")
-        event_manager.dispatch(MqttDisconnectEvent(client, userdata, flags, rc))
+        event_manager.dispatch(MqttDisconnectEvent())
 
     @inject.params(event_manager=EventManager)
     def _on_message(self, client, userdata, message, event_manager: EventManager):
